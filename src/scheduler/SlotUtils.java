@@ -10,14 +10,6 @@ public class SlotUtils {
 
 	public static final int METADATA_BYTES = LENGTH_BYTES + CHECKSUM_BYTES;
 
-	private static CRC32 crc32;
-
-	private static CRC32 getCRC32() {
-		if (crc32 == null)
-			crc32 = new CRC32();
-		return crc32;
-	}
-
 	/**
 	 * Encodes a slot with relevant metadata. Note that this
 	 * method overwrites the first METADATA_BYTE bytes of the
@@ -30,10 +22,8 @@ public class SlotUtils {
 		ByteBuffer wrapper = ByteBuffer.wrap(buffer, 0, offset);
 		wrapper.putInt(length);
 
-		crc32 = getCRC32();
-		crc32.reset();
-
 		// Update checksum with full slot contents.
+		CRC32 crc32 = new CRC32();
 		crc32.update(buffer, offset, buffer.length - offset);
 		wrapper.putLong(crc32.getValue());
 	}
@@ -56,10 +46,8 @@ public class SlotUtils {
 
 		// Don't bother with checksum on empty slot.
 		if (length > 0) {
-			CRC32 crc32 = getCRC32();
-			crc32.reset();
-
 			// Update checksum with full slot contents.
+			CRC32 crc32 = new CRC32();
 			crc32.update(buffer, offset, buffer.length - offset);
 			meta.isValid = (crc32.getValue() == checksum);
 		}
