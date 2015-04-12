@@ -112,6 +112,31 @@ public class Server {
 		}
 	}
 
+	private void readClients(byte[] slotBuffer, byte[] dataBuffer) throws IOException {
+		for (Socket clientSocket : clientSockets) {
+			InputStream is = clientSocket.getInputStream();
+			DataInputStream dis = new DataInputStream(is);
+			dis.readFully(dataBuffer);
+
+			XORCipher.xorBytes(dataBuffer, slotBuffer);
+		}
+	}
+
+	private void exchangeServers(byte[] slotBuffer, byte[] dataBuffer) throws IOException {
+		for (Socket serverSocket : serverSockets) {
+			OutputStream os = serverSocket.getOutputStream();
+			os.write(slotBuffer);
+		}
+
+		for (Socket serverSocket : serverSockets) {
+			InputStream is = serverSocket.getInputStream();
+			DataInputStream dis = new DataInputStream(is);
+			dis.readFully(dataBuffer);
+
+			XORCipher.xorBytes(dataBuffer, slotBuffer);
+		}
+	}
+
 	private void startProtocolRound() throws IOException {
 		// Scratch space for slot data - re-used as needed.
 		byte[] dataBuffer = new byte[Client.SLOT_LENGTH];
@@ -147,28 +172,11 @@ public class Server {
 				cipher.xorKeyStream(slotBuffer);
 
 				// Get ciphertexts from all connected clients.
-				for (Socket clientSocket : clientSockets) {
-					InputStream is = clientSocket.getInputStream();
-					DataInputStream dis = new DataInputStream(is);
-					dis.readFully(dataBuffer);
+				readClients(slotBuffer, dataBuffer);
 
-					XORCipher.xorBytes(dataBuffer, slotBuffer);
-				}
-				
 				// Send our aggregate ciphertext to the other servers.
-				for (Socket serverSocket : serverSockets) {
-					OutputStream os = serverSocket.getOutputStream();
-					os.write(slotBuffer);
-				}
-
 				// Get the other servers' aggregate ciphertexts.
-				for (Socket serverSocket : serverSockets) {
-					InputStream is = serverSocket.getInputStream();
-					DataInputStream dis = new DataInputStream(is);
-					dis.readFully(dataBuffer);
-
-					XORCipher.xorBytes(dataBuffer, slotBuffer);
-				}
+				exchangeServers(slotBuffer, dataBuffer);
 
 				// slotBuffer should now contain the plaintext. Do some
 				// sanity checking on it, simplistically for now, and
