@@ -3,6 +3,8 @@ package dcnet;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.DataInputStream;
 import java.io.InputStream;
@@ -16,6 +18,7 @@ import java.util.logging.Logger;
 import java.util.Random;
 
 import scheduler.BloomFilterScheduler;
+import scheduler.SlotUtils;
 
 import services.BloomFilter;
 
@@ -80,9 +83,9 @@ public class Client {
 	public static final int ATTEMPTS = 8;
 	public static final double FPR = 0.05;
 
-	public void readInputFromFile(File file) throws IOException {
+	public void readInputFromFile(String inputFile) throws IOException {
 		try (
-			FileReader fr = new FileReader(file);
+			FileReader fr = new FileReader(inputFile);
 			BufferedReader br = new BufferedReader(fr);
 		) {
 			String elem = null;
@@ -99,7 +102,14 @@ public class Client {
 			scheduler.writeSlotsToFile(String.format("run/slots/%d.csv", id));
 		}
 
-		for (int i = 0; i < scheduler.getSlotCount(); i++) {
+		// Record all the transmitted slots for output later.
+		final int slotCount = scheduler.getSlotCount();
+		byte[][] slotOutputs = new byte[slotCount][];
+
+		for (int i = 0; i < slotCount; i++) {
+			// Start off assuming slot is going to be empty.
+			boolean slotEmpty = true;
+
 			for (int j = 0; j < ATTEMPTS; j++) {
 				byte[] slotBuffer = new byte[SLOT_LENGTH];
 				if (slotRandom.nextBoolean()) {
@@ -110,11 +120,36 @@ public class Client {
 				OutputStream os = serverSocket.getOutputStream();
 				os.write(slotBuffer);
 
-				/*
-				InputStream is = serverSocket.getInputStream();
-				DataInputStream dis = new DataInputStream(is);
-				dis.readFully(slotBuffer);
-				*/
+				if (true) {
+					InputStream is = serverSocket.getInputStream();
+					DataInputStream dis = new DataInputStream(is);
+					dis.readFully(slotBuffer);
+
+					SlotUtils.SlotMetadata meta = SlotUtils.decode(slotBuffer);
+					if (meta.length > 0 && meta.isValid && slotEmpty) {
+						slotOutputs[i] = slotBuffer;
+						slotEmpty = false;
+					}
+				}
+			}
+		}
+
+		// Write the output of the round to a file for analysis.
+		if (true) {
+			String outputFile = String.format("run/output/%d.csv", id);
+			try (
+				FileWriter fw = new FileWriter(outputFile);
+				BufferedWriter bw = new BufferedWriter(fw);
+			) {
+				for (byte[] slot : slotOutputs) {
+					if (slot != null) {
+						bw.write(SlotUtils.toString(slot));
+						bw.newLine();
+					}
+				}
+			} catch (IOException e) {
+				System.err.println("Error writing output to file.");
+				throw e;
 			}
 		}
 	}
@@ -129,7 +164,7 @@ public class Client {
 
 		Client client = new Client(id, clients, servers, m, k);
 		try {
-			File inputFile = new File(String.format("run/input/%d.csv", id));
+			String inputFile = String.format("run/input/%d.csv", id);
 			client.readInputFromFile(inputFile);
 
 			client.initializeConnection();

@@ -66,14 +66,9 @@ public class BloomFilterScheduler {
 	public byte[] getSlot(int index, byte[] buffer) {
 		byte[] slot = slots[index];
 		if (slot != null) {
-			System.arraycopy(slot, 0, buffer, 12, slot.length);
-
-			ByteBuffer wrapper = ByteBuffer.wrap(buffer, 0, 12);
-			wrapper.putInt(slot.length);
-
-			CRC32 crc32 = new CRC32();
-			crc32.update(buffer, 12, buffer.length - 12);
-			wrapper.putLong(crc32.getValue());
+			final int offset = SlotUtils.METADATA_BYTES;
+			System.arraycopy(slot, 0, buffer, offset, slot.length);
+			SlotUtils.encode(buffer, slot.length);
 		}
 		return buffer;
 	}

@@ -18,6 +18,8 @@ import java.util.zip.CRC32;
 
 import services.BloomFilter;
 
+import scheduler.SlotUtils;
+
 public class Server {
 	public static final int CLIENT_PORT = 9495;
 	public static final int SERVER_PORT = 6566;
@@ -46,10 +48,12 @@ public class Server {
 		ServerSocket serverSocket;
 		ServerSocket clientSocket;
 		try {
+			// The other servers connect to us here.
 			serverSocket = new ServerSocket();
 			serverSocket.setReuseAddress(true);
 			serverSocket.bind(new InetSocketAddress(SERVER_PORT + id));
 
+			// And clients connect to us here.
 			clientSocket = new ServerSocket();
 			clientSocket.setReuseAddress(true);
 			clientSocket.bind(new InetSocketAddress(CLIENT_PORT + id));
@@ -58,9 +62,8 @@ public class Server {
 			throw e;
 		}
 
-		// Initialize all server connections first; connect to servers
-		// with a greater id and wait for connections from those with a
-		// lesser id.
+		// Initialize all server connections first:
+		// 	- Connect to servers with a id greater than ours.
 		serverSockets = new Socket[numServers - 1];
 		for (int i = 0; i < id; i++) {
 			try {
@@ -71,6 +74,7 @@ public class Server {
 				throw e;
 			}
 		}
+		//  - Wait for connections from those with lesser id.
 		for (int i = id + 1; i < numServers; i++) {
 			try {
 				Socket socket = serverSocket.accept();
@@ -80,12 +84,20 @@ public class Server {
 				throw e;
 			}
 		}
-		logger.info(String.format("%d/%d servers connected.",
-					numServers - 1, numServers - 1));
+		{ // All servers successfully connected.
+			String fmt =  "All (%d) servers connected.";
+			logger.info(String.format(fmt, numServers - 1));
+		}
 
-		// Then wait for all expected clients to connect.
-		clientSockets = new Socket[connectingClients()];
-		for (int i = 0; i < connectingClients(); i++) {
+		// For now assumes we know how many clients to expect;
+		// wait for them all to connect before proceeding.
+		final int connectingClients = connectingClients();
+		clientSockets = new Socket[connectingClients];
+		for (int i = 0; i < connectingClients; i++) {
+			if ((i > 0) && (i % 5 == 0)) {
+				String fmt = "%d/%d clients connected.";
+				logger.info(String.format(fmt,i, connectingClients));
+			}
 			try {
 				Socket socket = clientSocket.accept();
 				clientSockets[i] = socket;
@@ -93,10 +105,10 @@ public class Server {
 				logger.severe("Exception accepting client connection.");
 				throw e;
 			}
-			if ((i+1) % 5 == 0 || (i+1) == connectingClients()) {
-				logger.info(String.format("%d/%d clients connected.",
-							(i+1), connectingClients()));
-			}
+		}
+		{ // All clients successfully connected.
+			String fmt =  "All (%d) clients connected.";
+			logger.info(String.format(fmt, connectingClients));
 		}
 	}
 
@@ -111,10 +123,22 @@ public class Server {
 		byte[][] slotOutputs = new byte[slotCount][];
 
 		// Simple statistics, to make sure it's working.
+		int bytes = 0;
 		int collisions = 0;
 		int emptySlots = slotCount;
 
 		for (int i = 0; i < slotCount; i++) {
+			// Periodic debug/performance statistics.
+			final int sampleInterval = 10;
+			if (i % sampleInterval == 0) {
+				long elapsed = System.currentTimeMillis() - first;
+				double rate = 1000 * ((double) i / elapsed);
+
+				String fmt = "Slot #%d: %f slots/sec.";
+				logger.log(Level.FINE, String.format(fmt, i, rate));
+			}
+
+			// Start off assuming slot is going to be empty.
 			boolean slotEmpty = true;
 
 			for (int j = 0; j < Client.ATTEMPTS; j++) {
@@ -149,58 +173,55 @@ public class Server {
 				// slotBuffer should now contain the plaintext. Do some
 				// sanity checking on it, simplistically for now, and
 				// then stash it away for writing out later.
-				ByteBuffer wrapper = ByteBuffer.wrap(slotBuffer, 0, 12);
-				final int length = wrapper.getInt();
-				final long checksum = wrapper.getLong();
-
-				if (length > 0) {
-					CRC32 crc32 = new CRC32();
-					crc32.update(slotBuffer, 12, slotBuffer.length - 12);
-					if (crc32.getValue() != checksum) {
+				SlotUtils.SlotMetadata meta = SlotUtils.decode(slotBuffer);
+				if (meta.length > 0) {
+					if (!meta.isValid) {
 						logger.warning(String.format("Collision in slot %d.", i));
 						collisions++;
-					} else {
+					} else if (slotEmpty) {
 						slotOutputs[i] = slotBuffer;
 						slotEmpty = false;
+					}
+				}
+				bytes += slotBuffer.length;
+
+				// Send the plaintext back down to the clients, if needed.
+				if (true) {
+					for (Socket clientSocket : clientSockets) {
+						OutputStream os = clientSocket.getOutputStream();
+						os.write(slotBuffer);
 					}
 				}
 			}
 
 			// Adjust the count of empty slots.
 			emptySlots -= !slotEmpty ? 1 : 0;
-
-			// Periodic debug/performance statistics.
-			final int sampleInterval = 10;
-			if ((i + 1) % sampleInterval == 0) {
-				long now = System.currentTimeMillis();
-				logger.log(Level.FINE, String.format("Slot #%d: %f slots/sec.", (i+1)/Client.ATTEMPTS,
-							1000 * (((double) (i+1)) / (now - first)) / Client.ATTEMPTS));
-			}
 		}
 
-		String outputFile = String.format("run/output/%d.csv", id);
-		try (
-			FileWriter fw = new FileWriter(outputFile);
-			BufferedWriter bw = new BufferedWriter(fw);
-		) {
-			for (byte[] slot : slotOutputs) {
-				if (slot != null) {
-					ByteBuffer wrapper = ByteBuffer.wrap(slot, 0, 4);
-					int length = wrapper.getInt();
-
-					String elem = new String(slot, 12, length, "ISO-8859-1"); 
-					bw.write(elem);
-					bw.newLine();
+		// Write the output of the round to a file for analysis.
+		if (false) {
+			String outputFile = String.format("run/output/%d.csv", id);
+			try (
+				FileWriter fw = new FileWriter(outputFile);
+				BufferedWriter bw = new BufferedWriter(fw);
+			) {
+				for (byte[] slot : slotOutputs) {
+					if (slot != null) {
+						bw.write(SlotUtils.toString(slot));
+						bw.newLine();
+					}
 				}
+			} catch (IOException e) {
+				System.err.println("Error writing output to file.");
+				throw e;
 			}
-		} catch (IOException e) {
-			System.err.println("Error writing output to file.");
-			throw e;
 		}
 
-		long now = System.currentTimeMillis();
-		logger.info(String.format("%d bytes, %d ms, %d collisions, %d empty",
-					Client.SLOT_LENGTH * slotCount, now - first, collisions, emptySlots));
+		{ // Dump the final round statistics.
+			long elapsed = System.currentTimeMillis() - first;
+			String fmt = "slots=%d, bytes=%d, time=%d, collisions=%d, empty=%d";
+			logger.info(String.format(fmt, slotCount, bytes, elapsed, collisions, emptySlots));
+		}
 	}
 
 	/**
