@@ -17,6 +17,10 @@ import java.util.logging.Logger;
 import java.util.zip.CRC32;
 
 import scheduler.SlotUtils;
+import scheduler.ServerScheduler;
+import scheduler.control.ControlSlot;
+import scheduler.control.DummyControlSlot;
+import scheduler.control.BinaryControlSlot;
 
 import services.BloomFilter;
 
@@ -26,7 +30,7 @@ public class Server {
 
 	private int id, numClients, numServers;
 	private SlotCipher cipher;
-	private int slotCount;
+	private ServerScheduler scheduler;
 
 	private Socket[] clientSockets;
 	private Socket[] serverSockets;
@@ -37,7 +41,7 @@ public class Server {
 		this.id = id;
 		this.numClients = numClients;
 		this.numServers = numServers;
-		this.slotCount = m;
+		this.scheduler = new ServerScheduler(m);
 
 		this.cipher = new SlotCipher(getSecrets());
 		this.logger = Logger.getGlobal();
@@ -113,11 +117,30 @@ public class Server {
 	}
 
 	private void startProtocolRound() throws IOException {
-		// Scratch space for slot data - re-used as needed.
-		byte[] dataBuffer = new byte[Client.SLOT_LENGTH];
+		ControlSlot controlSlot;
+		if (Client.CONTROL_SLOT) {
+			logger.info("Running server with CONTROL_SLOTS.");
+			controlSlot = new BinaryControlSlot(scheduler, Client.ATTEMPTS);
+		} else {
+			controlSlot = new DummyControlSlot(scheduler, Client.ATTEMPTS);
+		}
+		final int controlSlotLength = controlSlot.getLength();
+		if (controlSlotLength > 0) {
+			final byte[] dataBuffer = new byte[controlSlotLength];
+			final byte[] slotBuffer = new byte[controlSlotLength];
 
-		// When the round started, used for periodic reporting.
-		long first = System.currentTimeMillis();
+			SocketUtils.read(slotBuffer, dataBuffer, clientSockets);
+			cipher.xorKeyStream(slotBuffer);
+
+			SocketUtils.write(slotBuffer, serverSockets);
+			SocketUtils.read(slotBuffer, dataBuffer, serverSockets);
+
+			controlSlot.setResult(slotBuffer);
+			SocketUtils.write(slotBuffer, clientSockets);
+		}
+
+		final int slotCount = controlSlot.getSlotCount();
+		final int attempts = controlSlot.getAttempts();
 
 		// Record all the transmitted slots for output later.
 		byte[][] slotOutputs = new byte[slotCount][];
@@ -127,11 +150,11 @@ public class Server {
 		int collisions = 0;
 		int emptySlots = slotCount;
 
-		if (Client.CONTROL_SLOT) {
-			logger.info("Running server with CONTROL_SLOTS.");
-			runControlSlots(false);
-		}
-		int attempts = Client.CONTROL_SLOT ? 1 : Client.ATTEMPTS;
+		// When the round started, used for periodic reporting.
+		long first = System.currentTimeMillis();
+
+		// Scratch space for slot data - re-used as needed.
+		byte[] dataBuffer = new byte[Client.SLOT_LENGTH];
 
 		for (int i = 0; i < slotCount; i++) {
 			// Periodic debug/performance statistics.
@@ -209,20 +232,6 @@ public class Server {
 			String fmt = "slots=%d, bytes=%d, time=%d, collisions=%d, empty=%d";
 			logger.info(String.format(fmt, slotCount, bytes, elapsed, collisions, emptySlots));
 		}
-	}
-
-	private void runControlSlots(boolean variableLength) throws IOException {
-		final int bytes = slotCount * Client.ATTEMPTS / 8;
-		final byte[] slotBuffer = new byte[bytes];
-		final byte[] dataBuffer = new byte[bytes];
-
-		cipher.xorKeyStream(slotBuffer);
-		SocketUtils.read(slotBuffer, dataBuffer, clientSockets);
-
-		SocketUtils.write(slotBuffer, serverSockets);
-		SocketUtils.read(slotBuffer, dataBuffer, serverSockets);
-
-		SocketUtils.write(slotBuffer, clientSockets);
 	}
 
 	/**

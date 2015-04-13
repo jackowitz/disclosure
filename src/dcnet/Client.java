@@ -177,7 +177,7 @@ public class Client {
 	public static final int ATTEMPTS = 8;
 	public static final double FPR = 0.05;
 
-	public static final boolean CONTROL_SLOT = false;
+	public static final boolean CONTROL_SLOT = true;
 
 	public static void main(String[] args) {
 		int id = Integer.valueOf(args[0]);
