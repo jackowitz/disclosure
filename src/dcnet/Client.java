@@ -21,7 +21,9 @@ import java.util.Random;
 
 import scheduler.BloomFilterScheduler;
 import scheduler.SlotUtils;
-import utils.SocketUtils;
+
+import scheduler.control.BinaryControlSlot;
+import scheduler.control.ControlSlot;
 
 import services.BloomFilter;
 
@@ -51,7 +53,7 @@ public class Client {
 		try {
 			serverSocket = new Socket("localhost", serverPort);
 		} catch (IOException e) {
-			System.err.println("Exception connecting to server.");
+			logger.severe("Exception connecting to server.");
 			throw e;
 		}
 	}
@@ -97,16 +99,25 @@ public class Client {
 			scheduler.writeSlotsToFile(String.format("run/slots/%d.csv", id));
 		}
 
-		// Run the control slots first, if needed.
-		BitSet coinFlips = null;
-		if (CONTROL_SLOTS) {
-			logger.info("Running with CONTROL_SLOTS.");
-			coinFlips = runControlSlots(false);
+		ControlSlot controlSlot = new ControlSlot(scheduler, ATTEMPTS);
+		final int controlSlotLength = controlSlot.getLength();
+		if (controlSlotLength > 0) {
+			// Run control slot as one big slot for now.
+			final byte[] slotBuffer = new byte[controlSlotLength];
+			controlSlot.getSlot(slotBuffer);
+			cipher.xorKeyStream(slotBuffer);
+
+			// Run control slots up through the servers.
+			SocketUtils.write(slotBuffer, serverSocket);
+			SocketUtils.read(null, slotBuffer, serverSocket);
+
+			controlSlot.setResult(slotBuffer);
 		}
-		int attempts = CONTROL_SLOTS ? 1 : ATTEMPTS;
+
+		final int slotCount = controlSlot.getSlotCount();
+		final int attempts = controlSlot.getAttempts();
 
 		// Record all the transmitted slots for output later.
-		final int slotCount = scheduler.getSlotCount();
 		byte[][] slotOutputs = new byte[slotCount][];
 
 		for (int i = 0; i < slotCount; i++) {
@@ -117,16 +128,10 @@ public class Client {
 
 			for (int j = 0; j < attempts; j++) {
 				final byte[] slotBuffer = new byte[SLOT_LENGTH];
-
-				boolean transmit = CONTROL_SLOTS && coinFlips.get(i);
-				transmit |= !CONTROL_SLOTS && slotRandom.nextBoolean();
-
-				if (transmit) {
-					scheduler.getSlot(i, slotBuffer);
-				}
+				controlSlot.getSlot(i, slotBuffer);
 				cipher.xorKeyStream(slotBuffer);
-				SocketUtils.write(slotBuffer, serverSocket);
 
+				SocketUtils.write(slotBuffer, serverSocket);
 				if (true) {
 					SocketUtils.read(null, slotBuffer, serverSocket);
 
@@ -153,60 +158,10 @@ public class Client {
 					}
 				}
 			} catch (IOException e) {
-				System.err.println("Error writing output to file.");
+				logger.warning("Error writing output to file.");
 				throw e;
 			}
 		}
-	}
-
-	public BitSet runControlSlots(boolean variableLength) throws IOException {
-		final int slotCount = scheduler.getSlotCount();
-		final int bits = ATTEMPTS * slotCount;
-		final int bytes = bits / 8;
-
-		// Flip all of the coins up front. It seems to be
-		// more efficient to generate random bits for all
-		// slots and the zero out the ones we don't want.
-		final byte[] coinFlips = new byte[bytes];
-		slotRandom.nextBytes(coinFlips);
-		for (int i = 0; i < coinFlips.length; i++) {
-			final int slotIndex = i / (ATTEMPTS / 8);
-			if (scheduler.isEmpty(slotIndex)) {
-				coinFlips[i] = 0;
-			}
-		}
-
-		// Run control slots as one big slot for now.
-		final byte[] slotBuffer = Arrays.copyOf(coinFlips, bytes);
-		cipher.xorKeyStream(slotBuffer);
-
-		// Run control slots up through the servers.
-		SocketUtils.write(slotBuffer, serverSocket);
-		SocketUtils.read(null, slotBuffer, serverSocket);
-
-		// Find a successful coin flip for each data slot.
-		// - Heuristic: Choose the first successful.
-		BitSet slotBits = BitSet.valueOf(slotBuffer);
-		BitSet flipBits = BitSet.valueOf(coinFlips);
-
-		BitSet successBits = new BitSet(slotCount);
-		BitSet choiceBits = new BitSet(slotCount);
-
-		// Go through and find the first bit set for each
-		// slot. We then see what our coin flip was that
-		// led to the successful result and stash that
-		// away for later.
-		for (int i = 0; i < slotCount; i++) {
-			for (int j = 0; j < ATTEMPTS; j++) {
-				final int n = i * ATTEMPTS + j;
-				if (slotBits.get(n)) {
-					successBits.set(i);
-					choiceBits.set(i, flipBits.get(n));
-					break;
-				}
-			}
-		}
-		return choiceBits;
 	}
 
 	public static final int ELEMENTS = 32;

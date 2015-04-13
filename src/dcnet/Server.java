@@ -17,7 +17,6 @@ import java.util.logging.Logger;
 import java.util.zip.CRC32;
 
 import scheduler.SlotUtils;
-import utils.SocketUtils;
 
 import services.BloomFilter;
 
@@ -129,7 +128,7 @@ public class Server {
 		int emptySlots = slotCount;
 
 		if (Client.CONTROL_SLOTS) {
-			logger.info("Running with CONTROL_SLOTS.");
+			logger.info("Running server with CONTROL_SLOTS.");
 			runControlSlots(false);
 		}
 		int attempts = Client.CONTROL_SLOTS ? 1 : Client.ATTEMPTS;
@@ -200,7 +199,7 @@ public class Server {
 					}
 				}
 			} catch (IOException e) {
-				System.err.println("Error writing output to file.");
+				logger.warning("Error writing output to file.");
 				throw e;
 			}
 		}

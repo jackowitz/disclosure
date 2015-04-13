@@ -7,9 +7,11 @@ import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.util.zip.CRC32;
 
+import scheduler.control.ControlSlot;
+
 import services.MultiHash;
 
-public class BloomFilterScheduler {
+public class BloomFilterScheduler implements ControlSlot.Scheduler {
 
 	private MultiHash hash;
 	private byte[][] slots;
@@ -62,6 +64,11 @@ public class BloomFilterScheduler {
 	 * The first 12 bytes are reserved for encoding metadata
 	 * about the slot; 4 bytes for the length, 8 for the
 	 * CRC32 checksum of the data.
+	 * The slot data is copied into buffer so that changes to
+	 * buffer do not effect the scheduler's data.
+	 * @param index index of slot
+	 * @param buffer copy destination
+	 * @return the passed buffer (for convenience)
 	 */
 	public byte[] getSlot(int index, byte[] buffer) {
 		byte[] slot = slots[index];
