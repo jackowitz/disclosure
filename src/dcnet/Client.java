@@ -99,7 +99,7 @@ public class Client {
 			scheduler.writeSlotsToFile(String.format("run/slots/%d.csv", id));
 		}
 
-		ControlSlot controlSlot = new ControlSlot(scheduler, ATTEMPTS);
+		ControlSlot controlSlot = new BinaryControlSlot(scheduler, ATTEMPTS);
 		final int controlSlotLength = controlSlot.getLength();
 		if (controlSlotLength > 0) {
 			// Run control slot as one big slot for now.
