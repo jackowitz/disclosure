@@ -23,6 +23,7 @@ import scheduler.BloomFilterScheduler;
 import scheduler.SlotUtils;
 
 import scheduler.control.BinaryControlSlot;
+import scheduler.control.DummyControlSlot;
 import scheduler.control.ControlSlot;
 
 import services.BloomFilter;
@@ -99,7 +100,13 @@ public class Client {
 			scheduler.writeSlotsToFile(String.format("run/slots/%d.csv", id));
 		}
 
-		ControlSlot controlSlot = new BinaryControlSlot(scheduler, ATTEMPTS);
+		ControlSlot controlSlot;
+	   	if (CONTROL_SLOT) {
+			logger.info("Running client with CONTROL_SLOTS.");
+			controlSlot = new BinaryControlSlot(scheduler, ATTEMPTS);
+		} else {
+			controlSlot = new DummyControlSlot(scheduler, ATTEMPTS);
+		}
 		final int controlSlotLength = controlSlot.getLength();
 		if (controlSlotLength > 0) {
 			// Run control slot as one big slot for now.
@@ -170,7 +177,7 @@ public class Client {
 	public static final int ATTEMPTS = 8;
 	public static final double FPR = 0.05;
 
-	public static final boolean CONTROL_SLOTS = true;
+	public static final boolean CONTROL_SLOT = false;
 
 	public static void main(String[] args) {
 		int id = Integer.valueOf(args[0]);

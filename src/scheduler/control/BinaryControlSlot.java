@@ -3,24 +3,19 @@ package scheduler.control;
 import java.util.BitSet;
 import java.util.Random;
 
-public class BinaryControlSlot implements ControlSlot {
-
-	private Scheduler scheduler;
-	private int attempts;
+public class BinaryControlSlot extends DummyControlSlot {
 
 	private byte[] coinFlips;
-	private Random random;
 
 	private BitSet successBits;
 	private BitSet coinBits;
 
 	public BinaryControlSlot(Scheduler scheduler, int attempts) throws IllegalArgumentException {
+		super(scheduler, attempts);
 		if (attempts % 8 != 0) {
 			String msg = "attempts must be evenly divisible by 8";
 			throw new IllegalArgumentException(msg);
 		}
-		this.scheduler = scheduler;
-		this.attempts = attempts;
 
 		final int slotCount = scheduler.getSlotCount();
 		final int bits = attempts * slotCount;
@@ -29,7 +24,6 @@ public class BinaryControlSlot implements ControlSlot {
 
 		// Generate random bits for all slots and then zero out
 		// the ones we don't actually need.
-		this.random = new Random();
 		random.nextBytes(coinFlips);
 
 		for (int i = 0; i < coinFlips.length; i++) {
@@ -40,15 +34,18 @@ public class BinaryControlSlot implements ControlSlot {
 		}
 	}
 
+	@Override
 	public int getLength() {
 		return coinFlips.length;
 	}
 
+	@Override
 	public byte[] getSlot(byte[] buffer) {
 		System.arraycopy(coinFlips, 0, buffer, 0, coinFlips.length);
 		return buffer;
 	}
 
+	@Override
 	public void setResult(byte[] result) {
 		// valueOf makes its own copy of the array so its
 		// safe to just pass it in here.
@@ -77,22 +74,27 @@ public class BinaryControlSlot implements ControlSlot {
 		}
 	}
 
+	@Override
 	public int getSlotCount() {
 		return scheduler.getSlotCount();
 	}
 
+	@Override
 	public int getAttempts() {
 		return 1;
 	}
 
+	@Override
 	public boolean isEmpty(int index) {
 		return !coinBits.get(index) || scheduler.isEmpty(index);
 	}
 
+	@Override
 	public int getLength(int index) {
 		return coinBits.get(index) ? scheduler.getLength(index) : 0;
 	}
 
+	@Override
 	public byte[] getSlot(int index, byte[] buffer) {
 		if (coinBits.get(index)) {
 			scheduler.getSlot(index, buffer);

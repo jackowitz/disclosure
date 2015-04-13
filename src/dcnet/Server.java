@@ -127,11 +127,11 @@ public class Server {
 		int collisions = 0;
 		int emptySlots = slotCount;
 
-		if (Client.CONTROL_SLOTS) {
+		if (Client.CONTROL_SLOT) {
 			logger.info("Running server with CONTROL_SLOTS.");
 			runControlSlots(false);
 		}
-		int attempts = Client.CONTROL_SLOTS ? 1 : Client.ATTEMPTS;
+		int attempts = Client.CONTROL_SLOT ? 1 : Client.ATTEMPTS;
 
 		for (int i = 0; i < slotCount; i++) {
 			// Periodic debug/performance statistics.
