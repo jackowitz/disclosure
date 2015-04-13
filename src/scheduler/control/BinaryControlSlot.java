@@ -7,8 +7,8 @@ public class BinaryControlSlot extends DummyControlSlot {
 
 	private byte[] coinFlips;
 
-	private BitSet successBits;
-	private BitSet coinBits;
+	protected BitSet successBits;
+	protected BitSet coinBits;
 
 	public BinaryControlSlot(Scheduler scheduler, int attempts) throws IllegalArgumentException {
 		super(scheduler, attempts);
@@ -91,7 +91,7 @@ public class BinaryControlSlot extends DummyControlSlot {
 
 	@Override
 	public int getLength(int index) {
-		return coinBits.get(index) ? scheduler.getLength(index) : 0;
+		return isEmpty(index) ? 0 : scheduler.getLength(index);
 	}
 
 	@Override

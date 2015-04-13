@@ -22,6 +22,7 @@ import java.util.Random;
 import scheduler.BloomFilterScheduler;
 import scheduler.SlotUtils;
 
+import scheduler.control.PruningBinaryControlSlot;
 import scheduler.control.BinaryControlSlot;
 import scheduler.control.DummyControlSlot;
 import scheduler.control.ControlSlot;
@@ -103,7 +104,7 @@ public class Client {
 		ControlSlot controlSlot;
 	   	if (CONTROL_SLOT) {
 			logger.info("Running client with CONTROL_SLOTS.");
-			controlSlot = new BinaryControlSlot(scheduler, ATTEMPTS);
+			controlSlot = new PruningBinaryControlSlot(scheduler, ATTEMPTS);
 		} else {
 			controlSlot = new DummyControlSlot(scheduler, ATTEMPTS);
 		}

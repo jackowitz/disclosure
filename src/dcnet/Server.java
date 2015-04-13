@@ -16,11 +16,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.CRC32;
 
-import scheduler.SlotUtils;
 import scheduler.ServerScheduler;
-import scheduler.control.ControlSlot;
-import scheduler.control.DummyControlSlot;
+import scheduler.SlotUtils;
+
+import scheduler.control.PruningBinaryControlSlot;
 import scheduler.control.BinaryControlSlot;
+import scheduler.control.DummyControlSlot;
+import scheduler.control.ControlSlot;
 
 import services.BloomFilter;
 
@@ -120,7 +122,7 @@ public class Server {
 		ControlSlot controlSlot;
 		if (Client.CONTROL_SLOT) {
 			logger.info("Running server with CONTROL_SLOTS.");
-			controlSlot = new BinaryControlSlot(scheduler, Client.ATTEMPTS);
+			controlSlot = new PruningBinaryControlSlot(scheduler, Client.ATTEMPTS);
 		} else {
 			controlSlot = new DummyControlSlot(scheduler, Client.ATTEMPTS);
 		}
@@ -191,9 +193,18 @@ public class Server {
 					if (!meta.isValid) {
 						logger.warning(String.format("Collision in slot %d.", i));
 						collisions++;
-					} else if (slotEmpty) {
+					} else if (slotOutputs[i] == null) {
 						slotOutputs[i] = slotBuffer;
-						slotEmpty = false;
+					}
+					slotEmpty = false;
+				} else {
+					for (byte b : slotBuffer) {
+						if (b != 0) {
+							logger.warning(String.format("Collision in slot %d.", i));
+							slotEmpty = false;
+							collisions++;
+							break;
+						}
 					}
 				}
 				bytes += slotBuffer.length;
