@@ -16,9 +16,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.CRC32;
 
-import services.BloomFilter;
-
 import scheduler.SlotUtils;
+import utils.SocketUtils;
+
+import services.BloomFilter;
 
 public class Server {
 	public static final int CLIENT_PORT = 9495;
@@ -112,31 +113,6 @@ public class Server {
 		}
 	}
 
-	private void readClients(byte[] slotBuffer, byte[] dataBuffer) throws IOException {
-		for (Socket clientSocket : clientSockets) {
-			InputStream is = clientSocket.getInputStream();
-			DataInputStream dis = new DataInputStream(is);
-			dis.readFully(dataBuffer);
-
-			XORCipher.xorBytes(dataBuffer, slotBuffer);
-		}
-	}
-
-	private void exchangeServers(byte[] slotBuffer, byte[] dataBuffer) throws IOException {
-		for (Socket serverSocket : serverSockets) {
-			OutputStream os = serverSocket.getOutputStream();
-			os.write(slotBuffer);
-		}
-
-		for (Socket serverSocket : serverSockets) {
-			InputStream is = serverSocket.getInputStream();
-			DataInputStream dis = new DataInputStream(is);
-			dis.readFully(dataBuffer);
-
-			XORCipher.xorBytes(dataBuffer, slotBuffer);
-		}
-	}
-
 	private void startProtocolRound() throws IOException {
 		// Scratch space for slot data - re-used as needed.
 		byte[] dataBuffer = new byte[Client.SLOT_LENGTH];
@@ -152,6 +128,12 @@ public class Server {
 		int collisions = 0;
 		int emptySlots = slotCount;
 
+		if (Client.CONTROL_SLOTS) {
+			logger.info("Running with CONTROL_SLOTS.");
+			runControlSlots(false);
+		}
+		int attempts = Client.CONTROL_SLOTS ? 1 : Client.ATTEMPTS;
+
 		for (int i = 0; i < slotCount; i++) {
 			// Periodic debug/performance statistics.
 			final int sampleInterval = 10;
@@ -166,17 +148,18 @@ public class Server {
 			// Start off assuming slot is going to be empty.
 			boolean slotEmpty = true;
 
-			for (int j = 0; j < Client.ATTEMPTS; j++) {
+			for (int j = 0; j < attempts; j++) {
 				// Keeps the running total, initially XOR of secrets.
 				byte[] slotBuffer = new byte[Client.SLOT_LENGTH];
 				cipher.xorKeyStream(slotBuffer);
 
 				// Get ciphertexts from all connected clients.
-				readClients(slotBuffer, dataBuffer);
+				SocketUtils.read(slotBuffer, dataBuffer, clientSockets);
 
 				// Send our aggregate ciphertext to the other servers.
 				// Get the other servers' aggregate ciphertexts.
-				exchangeServers(slotBuffer, dataBuffer);
+				SocketUtils.write(slotBuffer, serverSockets);
+				SocketUtils.read(slotBuffer, dataBuffer, serverSockets);
 
 				// slotBuffer should now contain the plaintext. Do some
 				// sanity checking on it, simplistically for now, and
@@ -195,10 +178,7 @@ public class Server {
 
 				// Send the plaintext back down to the clients, if needed.
 				if (true) {
-					for (Socket clientSocket : clientSockets) {
-						OutputStream os = clientSocket.getOutputStream();
-						os.write(slotBuffer);
-					}
+					SocketUtils.write(slotBuffer, clientSockets);
 				}
 			}
 
@@ -230,6 +210,20 @@ public class Server {
 			String fmt = "slots=%d, bytes=%d, time=%d, collisions=%d, empty=%d";
 			logger.info(String.format(fmt, slotCount, bytes, elapsed, collisions, emptySlots));
 		}
+	}
+
+	private void runControlSlots(boolean variableLength) throws IOException {
+		final int bytes = slotCount * Client.ATTEMPTS / 8;
+		final byte[] slotBuffer = new byte[bytes];
+		final byte[] dataBuffer = new byte[bytes];
+
+		cipher.xorKeyStream(slotBuffer);
+		SocketUtils.read(slotBuffer, dataBuffer, clientSockets);
+
+		SocketUtils.write(slotBuffer, serverSockets);
+		SocketUtils.read(slotBuffer, dataBuffer, serverSockets);
+
+		SocketUtils.write(slotBuffer, clientSockets);
 	}
 
 	/**

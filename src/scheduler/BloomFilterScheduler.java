@@ -73,6 +73,15 @@ public class BloomFilterScheduler {
 		return buffer;
 	}
 
+	public boolean isEmpty(int index) {
+		return slots[index] == null;
+	}
+
+	public int getLength(int index) {
+		final byte[] slot = slots[index];
+		return (slot == null) ? 0 : slot.length;
+	}
+
 	public void writeSlotsToFile(String outputFile) throws IOException {
 		writeSlotsToFile(outputFile, false);
 	}
