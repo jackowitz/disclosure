@@ -5,25 +5,26 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.util.Random;
 import java.util.zip.CRC32;
 
 import scheduler.control.ControlSlot;
 
-import services.MultiHash;
+import services.BloomFilter;
 
 public class BloomFilterScheduler implements ControlSlot.Scheduler {
 
-	private MultiHash hash;
+	private BloomFilter bloomFilter;
+	private byte[][] cache;
 	private byte[][] slots;
-	private int[] slotCounts;
 
 	private int elementCount;
 	private int filledCount;
 
 	public BloomFilterScheduler(int m, int k) {
-		hash = new MultiHash(k, m);
-		slots = new byte[m][];
-		slotCounts = new int[m];
+		this.bloomFilter = new BloomFilter(k, m, true);
+		this.cache = new byte[m][];
+		this.slots = new byte[m][];
 	}
 
 	public boolean add(String value) {
@@ -36,19 +37,42 @@ public class BloomFilterScheduler implements ControlSlot.Scheduler {
 	}
 
 	public boolean add(byte[] value) {
-		int[] indices = hash.hash(value);
-		for (int index : indices) {
-			slotCounts[index]++;
-			if (slotCounts[index] == 1) {
-				slots[index] = value;
+		cache[elementCount++] = value;
+		return bloomFilter.insert(value);
+	}
+
+	public boolean finalizeSchedule() {
+		return finalizeSchedule(Integer.MAX_VALUE);
+	}
+
+	public boolean finalizeSchedule(int slotsPerElement) {
+		Random random = new Random();
+		filledCount = 0;
+
+		boolean collision = false;
+		for (int i = 0; i < elementCount; i++) {
+			int[] indices = bloomFilter.getUniqueIndices(cache[i]);
+			if (indices.length < 1) {
+				collision = true;
+				continue;
+			}
+
+			int limit = Math.min(slotsPerElement, indices.length);
+
+			// Pick a random sample of up to slotsPerElement indices.
+			for (int j = limit + 1; j < indices.length; j++) {
+				int k = random.nextInt(j);
+				if (k < limit) {
+					indices[k] = indices[j];
+				}
+			}
+			// Assign the element to the slots we just picked.
+			for (int j = 0; j < limit; j++) {
+				slots[indices[j]] = cache[i];
 				filledCount++;
-			} else {
-				slots[index] = null;
-				filledCount--;
 			}
 		}
-		elementCount++;
-		return true;
+		return collision;
 	}
 
 	public int getSlotCount() {

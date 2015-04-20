@@ -96,6 +96,14 @@ public class Client {
 		}
 	}
 
+	public void finalizeSchedule(int limit) {
+		scheduler.finalizeSchedule(limit);
+	}
+
+	public void finalizeSchedule() {
+		scheduler.finalizeSchedule();
+	}
+
 	public void startProtocolRound() throws IOException {
 		if (false) {
 			scheduler.writeSlotsToFile(String.format("run/slots/%d.csv", id));
@@ -194,6 +202,7 @@ public class Client {
 		try {
 			String inputFile = String.format("run/input/%d.csv", id);
 			client.readInputFromFile(inputFile);
+			client.finalizeSchedule();
 
 			client.initializeConnection();
 			client.startProtocolRound();
