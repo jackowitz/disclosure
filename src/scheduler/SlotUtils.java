@@ -32,6 +32,7 @@ public class SlotUtils {
 		public int offset = METADATA_BYTES;
 		public int length;
 
+		public boolean isEmpty;
 		public boolean isValid;
 	}
 
@@ -44,8 +45,10 @@ public class SlotUtils {
 		final int length = wrapper.getInt();
 		final long checksum = wrapper.getLong();
 
+		meta.isEmpty = length == 0 && checksum == 0;
+
 		// Don't bother with checksum on empty slot.
-		if (length > 0) {
+		if (!meta.isEmpty) {
 			// Update checksum with full slot contents.
 			CRC32 crc32 = new CRC32();
 			crc32.update(buffer, offset, buffer.length - offset);

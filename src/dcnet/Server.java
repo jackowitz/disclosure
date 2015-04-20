@@ -204,21 +204,13 @@ public class Server extends Base {
 				// sanity checking on it, simplistically for now, and
 				// then stash it away for writing out later.
 				SlotUtils.SlotMetadata meta = SlotUtils.decode(slotBuffer);
-				if (meta.length > 0) {
+				if (!meta.isEmpty) {
 					if (!meta.isValid) {
 						logger.warning(String.format("Collision in slot %d.", i));
 						collision = true;
-					} else if (slotOutputs[i] == null) {
+					} else if (slotEmpty) {
 						slotOutputs[i] = slotBuffer;
 						slotEmpty = false;
-					}
-				} else {
-					for (byte b : slotBuffer) {
-						if (b != 0) {
-							logger.warning(String.format("Collision in slot %d.", i));
-							collision = true;
-							break;
-						}
 					}
 				}
 				bytes += slotBuffer.length;

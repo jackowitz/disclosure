@@ -159,8 +159,10 @@ public class Client extends Base {
 					SocketUtils.read(null, slotBuffer, serverSocket);
 
 					SlotUtils.SlotMetadata meta = SlotUtils.decode(slotBuffer);
-					if (meta.length > 0 && meta.isValid && slotEmpty) {
-						slotOutputs[i] = slotBuffer;
+					if (!meta.isEmpty) {
+						if(meta.isValid && slotEmpty) {
+							slotOutputs[i] = slotBuffer;
+						}
 						slotEmpty = false;
 					}
 				}
