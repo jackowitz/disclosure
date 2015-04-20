@@ -38,12 +38,12 @@ public class PruningBinaryControlSlot extends BinaryControlSlot {
 
 	@Override
 	public int getLength(int index) {
-		return scheduler.getLength(convertIndex(index));
+		return super.getLength(convertIndex(index));
 	}
 
 	@Override
 	public byte[] getSlot(int index, byte[] buffer) {
-		return scheduler.getSlot(convertIndex(index), buffer);
+		return super.getSlot(convertIndex(index), buffer);
 	}
 
 	private int convertIndex(int index) {
