@@ -166,6 +166,8 @@ public class Server extends Base {
 		int collisionSlots = 0;
 		int emptySlots = slotCount;
 
+		int[] attemptsUsed = new int[slotCount];
+
 		// When the round started, used for periodic reporting.
 		long first = System.currentTimeMillis();
 
@@ -219,10 +221,17 @@ public class Server extends Base {
 				if (true) {
 					SocketUtils.write(slotBuffer, clientSockets);
 				}
+				if (!slotEmpty || collision) {
+					attemptsUsed[i] = j;
+					break;
+				}
 			}
 
 			// Adjust the count of empty slots and collision slots.
 			slotEmpty &= !collision;
+			if (slotEmpty) {
+				attemptsUsed[i] = attempts;
+			}
 			emptySlots -= !slotEmpty ? 1 : 0;
 			collisionSlots += collision ? 1 : 0;
 		}
@@ -248,10 +257,21 @@ public class Server extends Base {
 
 		{ // Dump the final round statistics.
 			long elapsed = System.currentTimeMillis() - first;
+
+			int minAttempts = Integer.MAX_VALUE, maxAttempts = 0;
+			long tally = 0;
+			for (int count : attemptsUsed) {
+				minAttempts = Math.min(count, minAttempts);
+				maxAttempts = Math.max(count, maxAttempts);
+				tally += count;
+			}
+
 			String fmt = "slots=%d (%d), bytes=%d (%d), time=%d (%d), collisions=%d, empty=%d";
 			logger.info(String.format(fmt, slotCount, scheduler.getSlotCount(),
 						bytes, controlSlot.getLength(), elapsed, controlSlotEnd - controlSlotStart,
 						collisionSlots, emptySlots));
+			fmt = "attempts: min=%d, max=%d, avg=%f";
+			logger.info(String.format(fmt, minAttempts, maxAttempts, tally / (double) slotCount));
 		}
 	}
 

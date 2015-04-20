@@ -166,6 +166,9 @@ public class Client extends Base {
 						slotEmpty = false;
 					}
 				}
+				if (!slotEmpty) {
+					break;
+				}
 			}
 		}
 
