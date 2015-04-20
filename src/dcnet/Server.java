@@ -1,5 +1,6 @@
 package dcnet;
 
+import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.BufferedWriter;
 import java.io.DataInputStream;
@@ -11,6 +12,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.Properties;
 import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -26,7 +28,7 @@ import scheduler.control.ControlSlot;
 
 import services.BloomFilter;
 
-public class Server {
+public class Server extends Base {
 	public static final int CLIENT_PORT = 9495;
 	public static final int SERVER_PORT = 6566;
 
@@ -39,11 +41,17 @@ public class Server {
 
 	private Logger logger;
 
-	public Server(int id, int numClients, int numServers, int m) {
+	public Server(Properties properties, int id, int numClients, int numServers) {
+		super(properties);
+
 		this.id = id;
 		this.numClients = numClients;
 		this.numServers = numServers;
-		this.scheduler = new ServerScheduler(m);
+
+		double[] params = BloomFilter.getParameterEstimate(estimatedElementsPerRound, fpr);
+		int slotCount = (int) params[0];
+
+		this.scheduler = new ServerScheduler(slotCount);
 
 		this.cipher = new SlotCipher(getSecrets());
 		this.logger = Logger.getGlobal();
@@ -73,7 +81,8 @@ public class Server {
 		serverSockets = new Socket[numServers - 1];
 		for (int i = 0; i < id; i++) {
 			try {
-				Socket socket = new Socket("localhost", SERVER_PORT + i);
+				String server = (servers == null) ? "localhost" : servers[i];
+				Socket socket = new Socket(server, SERVER_PORT + i);
 				serverSockets[i] = socket;
 			} catch (UnknownHostException e) {
 				logger.severe("Unknown server host.");
@@ -120,11 +129,11 @@ public class Server {
 
 	private void startProtocolRound() throws IOException {
 		ControlSlot controlSlot;
-		if (Client.CONTROL_SLOT) {
+		if (controlSlotType) {
 			logger.info("Running server with CONTROL_SLOTS.");
-			controlSlot = new PruningBinaryControlSlot(scheduler, Client.ATTEMPTS);
+			controlSlot = new PruningBinaryControlSlot(scheduler, attemptsPerSlot);
 		} else {
-			controlSlot = new DummyControlSlot(scheduler, Client.ATTEMPTS);
+			controlSlot = new DummyControlSlot(scheduler, attemptsPerSlot);
 		}
 		final int controlSlotLength = controlSlot.getLength();
 		if (controlSlotLength > 0) {
@@ -156,7 +165,7 @@ public class Server {
 		long first = System.currentTimeMillis();
 
 		// Scratch space for slot data - re-used as needed.
-		byte[] dataBuffer = new byte[Client.SLOT_LENGTH];
+		byte[] dataBuffer = new byte[defaultSlotLength];
 
 		for (int i = 0; i < slotCount; i++) {
 			// Periodic debug/performance statistics.
@@ -174,7 +183,7 @@ public class Server {
 
 			for (int j = 0; j < attempts; j++) {
 				// Keeps the running total, initially XOR of secrets.
-				byte[] slotBuffer = new byte[Client.SLOT_LENGTH];
+				byte[] slotBuffer = new byte[defaultSlotLength];
 				cipher.xorKeyStream(slotBuffer);
 
 				// Get ciphertexts from all connected clients.
@@ -268,12 +277,19 @@ public class Server {
 		int clients = Integer.valueOf(args[1]);
 		int servers = Integer.valueOf(args[2]);
 
+		Properties properties = new Properties();
+		try {
+			FileInputStream fis = new FileInputStream("run/config.properties");
+			properties.load(fis);
+			fis.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+
 		Logger.getGlobal().setLevel((id == 0) ? Level.FINE : Level.INFO);
 
-		double[] params = BloomFilter.getParameterEstimate(Client.ELEMENTS, Client.FPR);
-		int m = (int) params[0];
-
-		Server server = new Server(id, clients, servers, m);
+		Server server = new Server(properties, id, clients, servers);
 		try {
 			server.initializeConnections();
 			server.startProtocolRound();

@@ -2,6 +2,7 @@ package dcnet;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.BufferedWriter;
@@ -30,8 +31,9 @@ import scheduler.control.ControlSlot;
 
 import services.BloomFilter;
 
-public class Client {
+public class Client extends Base {
 	private int id, numServers;
+
 	private Socket serverSocket;
 
 	private SlotCipher cipher;
@@ -40,20 +42,24 @@ public class Client {
 	private Logger logger;
 	private Random slotRandom;
 
-	public Client(int id, int numServers) {
+	public Client(Properties properties, int id, int numServers) {
+		super(properties);
+
 		this.id = id;
 		this.numServers = numServers;
-		this.cipher = new SlotCipher(getSecrets());
-		this.scheduler = new BloomFilterScheduler(ELEMENTS, FPR);
 		this.slotRandom = new Random();
-
 		this.logger = Logger.getGlobal();
+
+		this.cipher = new SlotCipher(getSecrets());
+		this.scheduler = new BloomFilterScheduler(estimatedElementsPerRound, fpr);
+
 	}
 
 	private void initializeConnection() throws IOException {
+		String serverHost = (servers == null) ? "localhost" : servers[getServer()];
 		int serverPort = Server.CLIENT_PORT + getServer();
 		try {
-			serverSocket = new Socket("localhost", serverPort);
+			serverSocket = new Socket(serverHost, serverPort);
 		} catch (IOException e) {
 			logger.severe("Exception connecting to server.");
 			throw e;
@@ -110,11 +116,11 @@ public class Client {
 		}
 
 		ControlSlot controlSlot;
-	   	if (CONTROL_SLOT) {
+	   	if (controlSlotType) {
 			logger.info("Running client with CONTROL_SLOTS.");
-			controlSlot = new PruningBinaryControlSlot(scheduler, ATTEMPTS);
+			controlSlot = new PruningBinaryControlSlot(scheduler, attemptsPerSlot);
 		} else {
-			controlSlot = new DummyControlSlot(scheduler, ATTEMPTS);
+			controlSlot = new DummyControlSlot(scheduler, attemptsPerSlot);
 		}
 		final int controlSlotLength = controlSlot.getLength();
 		if (controlSlotLength > 0) {
@@ -140,10 +146,8 @@ public class Client {
 			// Start off assuming slot is going to be empty.
 			boolean slotEmpty = true;
 
-			// XXX Check to see if can prune entire slot.
-
 			for (int j = 0; j < attempts; j++) {
-				final byte[] slotBuffer = new byte[SLOT_LENGTH];
+				final byte[] slotBuffer = new byte[defaultSlotLength];
 				controlSlot.getSlot(i, slotBuffer);
 				cipher.xorKeyStream(slotBuffer);
 
@@ -180,21 +184,23 @@ public class Client {
 		}
 	}
 
-	public static final int ELEMENTS = 32;
-	public static final int SLOT_LENGTH = 512;
-
-	public static final int ATTEMPTS = 8;
-	public static final double FPR = 0.05;
-
-	public static final boolean CONTROL_SLOT = true;
-
 	public static void main(String[] args) {
 		int id = Integer.valueOf(args[0]);
 		int servers = Integer.valueOf(args[1]);
 
+		Properties properties = new Properties();
+		try {
+			FileInputStream fis = new FileInputStream("run/config.properties");
+			properties.load(fis);
+			fis.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+
 		Logger.getGlobal().setLevel((id == 0) ? Level.FINE : Level.INFO);
 
-		Client client = new Client(id, servers);
+		Client client = new Client(properties, id, servers);
 		try {
 			String inputFile = String.format("run/input/%d.csv", id);
 			client.readInputFromFile(inputFile);
