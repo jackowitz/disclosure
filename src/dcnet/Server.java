@@ -135,6 +135,9 @@ public class Server extends Base {
 		} else {
 			controlSlot = new DummyControlSlot(scheduler, attemptsPerSlot);
 		}
+
+		long controlSlotStart = System.currentTimeMillis();
+
 		final int controlSlotLength = controlSlot.getLength();
 		if (controlSlotLength > 0) {
 			final byte[] dataBuffer = new byte[controlSlotLength];
@@ -149,6 +152,8 @@ public class Server extends Base {
 			controlSlot.setResult(slotBuffer);
 			SocketUtils.write(slotBuffer, clientSockets);
 		}
+
+		long controlSlotEnd = System.currentTimeMillis();
 
 		final int slotCount = controlSlot.getSlotCount();
 		final int attempts = controlSlot.getAttempts();
@@ -249,8 +254,10 @@ public class Server extends Base {
 
 		{ // Dump the final round statistics.
 			long elapsed = System.currentTimeMillis() - first;
-			String fmt = "slots=%d, bytes=%d, time=%d, collisions=%d, empty=%d";
-			logger.info(String.format(fmt, slotCount, bytes, elapsed, collisions, emptySlots));
+			String fmt = "slots=%d (%d), bytes=%d (%d), time=%d (%d), collisions=%d, empty=%d";
+			logger.info(String.format(fmt, slotCount, scheduler.getSlotCount(),
+						bytes, controlSlot.getLength(), elapsed, controlSlotEnd - controlSlotStart,
+						collisions, emptySlots));
 		}
 	}
 
