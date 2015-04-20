@@ -21,7 +21,10 @@ public class BloomFilterScheduler implements ControlSlot.Scheduler {
 	private int elementCount;
 	private int filledCount;
 
-	public BloomFilterScheduler(int m, int k) {
+	public BloomFilterScheduler(int elements, double fpr) {
+		double[] params = BloomFilter.getParameterEstimate(elements, fpr);
+		int m = (int) params[0], k = (int) params[1];
+
 		this.bloomFilter = new BloomFilter(k, m, true);
 		this.cache = new byte[m][];
 		this.slots = new byte[m][];

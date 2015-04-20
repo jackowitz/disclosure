@@ -9,5 +9,5 @@ done
 
 sleep 2
 for i in `seq 0 $(($c-1))`; do
-	java -cp './dist/disclosure.jar:./lib/sepia.jar' dcnet.Client $i $c $s &
+	java -cp './dist/disclosure.jar:./lib/sepia.jar' dcnet.Client $i $s &
 done

@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.Properties;
 import java.util.Random;
 
 import scheduler.BloomFilterScheduler;
@@ -30,7 +31,7 @@ import scheduler.control.ControlSlot;
 import services.BloomFilter;
 
 public class Client {
-	private int id, numClients, numServers;
+	private int id, numServers;
 	private Socket serverSocket;
 
 	private SlotCipher cipher;
@@ -39,12 +40,11 @@ public class Client {
 	private Logger logger;
 	private Random slotRandom;
 
-	public Client(int id, int numClients, int numServers, int m, int k) {
+	public Client(int id, int numServers) {
 		this.id = id;
-		this.numClients = numClients;
 		this.numServers = numServers;
 		this.cipher = new SlotCipher(getSecrets());
-		this.scheduler = new BloomFilterScheduler(m, k);
+		this.scheduler = new BloomFilterScheduler(ELEMENTS, FPR);
 		this.slotRandom = new Random();
 
 		this.logger = Logger.getGlobal();
@@ -190,19 +190,15 @@ public class Client {
 
 	public static void main(String[] args) {
 		int id = Integer.valueOf(args[0]);
-		int clients = Integer.valueOf(args[1]);
-		int servers = Integer.valueOf(args[2]);
+		int servers = Integer.valueOf(args[1]);
 
 		Logger.getGlobal().setLevel((id == 0) ? Level.FINE : Level.INFO);
 
-		double[] params = BloomFilter.getParameterEstimate(ELEMENTS, FPR);
-		int m = (int) params[0], k = (int) params[1];
-
-		Client client = new Client(id, clients, servers, m, k);
+		Client client = new Client(id, servers);
 		try {
 			String inputFile = String.format("run/input/%d.csv", id);
 			client.readInputFromFile(inputFile);
-			client.finalizeSchedule();
+			client.finalizeSchedule(1);
 
 			client.initializeConnection();
 			client.startProtocolRound();
