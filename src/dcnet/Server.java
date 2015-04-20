@@ -163,7 +163,7 @@ public class Server extends Base {
 
 		// Simple statistics, to make sure it's working.
 		int bytes = 0;
-		int collisions = 0;
+		int collisionSlots = 0;
 		int emptySlots = slotCount;
 
 		// When the round started, used for periodic reporting.
@@ -185,6 +185,7 @@ public class Server extends Base {
 
 			// Start off assuming slot is going to be empty.
 			boolean slotEmpty = true;
+			boolean collision = false;
 
 			for (int j = 0; j < attempts; j++) {
 				// Keeps the running total, initially XOR of secrets.
@@ -206,17 +207,16 @@ public class Server extends Base {
 				if (meta.length > 0) {
 					if (!meta.isValid) {
 						logger.warning(String.format("Collision in slot %d.", i));
-						collisions++;
+						collision = true;
 					} else if (slotOutputs[i] == null) {
 						slotOutputs[i] = slotBuffer;
+						slotEmpty = false;
 					}
-					slotEmpty = false;
 				} else {
 					for (byte b : slotBuffer) {
 						if (b != 0) {
 							logger.warning(String.format("Collision in slot %d.", i));
-							slotEmpty = false;
-							collisions++;
+							collision = true;
 							break;
 						}
 					}
@@ -229,8 +229,10 @@ public class Server extends Base {
 				}
 			}
 
-			// Adjust the count of empty slots.
+			// Adjust the count of empty slots and collision slots.
+			slotEmpty &= !collision;
 			emptySlots -= !slotEmpty ? 1 : 0;
+			collisionSlots += collision ? 1 : 0;
 		}
 
 		// Write the output of the round to a file for analysis.
@@ -257,7 +259,7 @@ public class Server extends Base {
 			String fmt = "slots=%d (%d), bytes=%d (%d), time=%d (%d), collisions=%d, empty=%d";
 			logger.info(String.format(fmt, slotCount, scheduler.getSlotCount(),
 						bytes, controlSlot.getLength(), elapsed, controlSlotEnd - controlSlotStart,
-						collisions, emptySlots));
+						collisionSlots, emptySlots));
 		}
 	}
 
