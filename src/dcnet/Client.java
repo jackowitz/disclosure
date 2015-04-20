@@ -32,6 +32,8 @@ import scheduler.control.ControlSlot;
 import services.BloomFilter;
 
 public class Client extends Base {
+	private static final String PROP_SLOT_PER_ELEMENT = "slot.slotsPerElement";
+
 	private int id, numServers;
 
 	private Socket serverSocket;
@@ -42,6 +44,8 @@ public class Client extends Base {
 	private Logger logger;
 	private Random slotRandom;
 
+	private int slotsPerElement;
+
 	public Client(Properties properties, int id, int numServers) {
 		super(properties);
 
@@ -51,6 +55,9 @@ public class Client extends Base {
 		this.logger = Logger.getGlobal();
 
 		this.cipher = new SlotCipher(getSecrets());
+
+		slotsPerElement = Integer.valueOf(properties.getProperty(
+					PROP_SLOT_PER_ELEMENT, Integer.toString(Integer.MAX_VALUE)));
 		this.scheduler = new BloomFilterScheduler(estimatedElementsPerRound, fpr);
 
 	}
@@ -102,12 +109,8 @@ public class Client extends Base {
 		}
 	}
 
-	public void finalizeSchedule(int limit) {
-		scheduler.finalizeSchedule(limit);
-	}
-
 	public void finalizeSchedule() {
-		scheduler.finalizeSchedule();
+		scheduler.finalizeSchedule(slotsPerElement);
 	}
 
 	public void startProtocolRound() throws IOException {
@@ -204,7 +207,7 @@ public class Client extends Base {
 		try {
 			String inputFile = String.format("run/input/%d.csv", id);
 			client.readInputFromFile(inputFile);
-			client.finalizeSchedule(1);
+			client.finalizeSchedule();
 
 			client.initializeConnection();
 			client.startProtocolRound();

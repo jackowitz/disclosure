@@ -49,6 +49,9 @@ public class BloomFilterScheduler implements ControlSlot.Scheduler {
 	}
 
 	public boolean finalizeSchedule(int slotsPerElement) {
+		if (slotsPerElement < 1) {
+			slotsPerElement = Integer.MAX_VALUE;
+		}
 		Random random = new Random();
 		filledCount = 0;
 
