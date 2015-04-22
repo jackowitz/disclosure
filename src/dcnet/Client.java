@@ -114,13 +114,12 @@ public class Client extends Base {
 	}
 
 	public void startProtocolRound() throws IOException {
-		if (false) {
+		if (true) {
 			scheduler.writeSlotsToFile(String.format("run/slots/%d.csv", id));
 		}
 
 		ControlSlot controlSlot;
 	   	if (controlSlotType) {
-			logger.info("Running client with CONTROL_SLOTS.");
 			controlSlot = new PruningBinaryControlSlot(scheduler, attemptsPerSlot);
 		} else {
 			controlSlot = new DummyControlSlot(scheduler, attemptsPerSlot);
@@ -151,7 +150,7 @@ public class Client extends Base {
 
 			for (int j = 0; j < attempts; j++) {
 				final byte[] slotBuffer = new byte[defaultSlotLength];
-				controlSlot.getSlot(i, slotBuffer);
+				controlSlot.getSlot(i, slotBuffer, false);
 				cipher.xorKeyStream(slotBuffer);
 
 				SocketUtils.write(slotBuffer, serverSocket);
@@ -179,11 +178,23 @@ public class Client extends Base {
 				FileWriter fw = new FileWriter(outputFile);
 				BufferedWriter bw = new BufferedWriter(fw);
 			) {
-				for (byte[] slot : slotOutputs) {
+				byte[] dataBuffer = new byte[defaultSlotLength];
+				for (int i = 0; i < slotCount; i++) {
+					if (!controlSlot.isEmpty(i)) {
+						controlSlot.getSlot(i, dataBuffer, true);
+						bw.write(SlotUtils.toString(dataBuffer));
+					} else {
+						bw.write("<>");
+					}
+					bw.write(": ");
+
+					byte[] slot = slotOutputs[i];
 					if (slot != null) {
 						bw.write(SlotUtils.toString(slot));
-						bw.newLine();
+					} else {
+						bw.write("<>");
 					}
+					bw.newLine();
 				}
 			} catch (IOException e) {
 				logger.warning("Error writing output to file.");

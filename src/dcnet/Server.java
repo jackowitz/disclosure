@@ -130,7 +130,6 @@ public class Server extends Base {
 	private void startProtocolRound() throws IOException {
 		ControlSlot controlSlot;
 		if (controlSlotType) {
-			logger.info("Running server with CONTROL_SLOTS.");
 			controlSlot = new PruningBinaryControlSlot(scheduler, attemptsPerSlot);
 		} else {
 			controlSlot = new DummyControlSlot(scheduler, attemptsPerSlot);
@@ -189,7 +188,8 @@ public class Server extends Base {
 			boolean slotEmpty = true;
 			boolean collision = false;
 
-			for (int j = 0; j < attempts; j++) {
+			int j;
+			for (j = 0; j < attempts; j++) {
 				// Keeps the running total, initially XOR of secrets.
 				byte[] slotBuffer = new byte[defaultSlotLength];
 				cipher.xorKeyStream(slotBuffer);
@@ -212,27 +212,26 @@ public class Server extends Base {
 						collision = true;
 					} else if (slotEmpty) {
 						slotOutputs[i] = slotBuffer;
-						slotEmpty = false;
 					}
+					slotEmpty = false;
 				}
+
 				bytes += slotBuffer.length;
 
 				// Send the plaintext back down to the clients, if needed.
 				if (true) {
 					SocketUtils.write(slotBuffer, clientSockets);
 				}
-				if (!slotEmpty || collision) {
-					attemptsUsed[i] = j;
+				if (!slotEmpty) {
+					j++;
 					break;
 				}
 			}
 
+			attemptsUsed[i] = j;
+
 			// Adjust the count of empty slots and collision slots.
-			slotEmpty &= !collision;
-			if (slotEmpty) {
-				attemptsUsed[i] = attempts;
-			}
-			emptySlots -= !slotEmpty ? 1 : 0;
+			emptySlots -= slotEmpty ? 0 : 1;
 			collisionSlots += collision ? 1 : 0;
 		}
 

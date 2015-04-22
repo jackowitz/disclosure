@@ -26,5 +26,5 @@ public interface ControlSlot {
 	public boolean isEmpty(int index);
 	public int getLength(int index);
 
-	public byte[] getSlot(int index, byte[] buffer);
+	public byte[] getSlot(int index, byte[] buffer, boolean raw);
 }

@@ -32,8 +32,7 @@ public class PruningBinaryControlSlot extends BinaryControlSlot {
 
 	@Override
 	public boolean isEmpty(int index) {
-		assert(!super.isEmpty(convertIndex(index)));
-		return false;
+		return super.isEmpty(convertIndex(index));
 	}
 
 	@Override
@@ -42,8 +41,8 @@ public class PruningBinaryControlSlot extends BinaryControlSlot {
 	}
 
 	@Override
-	public byte[] getSlot(int index, byte[] buffer) {
-		return super.getSlot(convertIndex(index), buffer);
+	public byte[] getSlot(int index, byte[] buffer, boolean raw) {
+		return super.getSlot(convertIndex(index), buffer, raw);
 	}
 
 	private int convertIndex(int index) {

@@ -42,8 +42,8 @@ public class DummyControlSlot implements ControlSlot {
 		return scheduler.getLength(index);
 	}
 
-	public byte[] getSlot(int index, byte[] buffer) {
-		if (!isEmpty(index) && random.nextBoolean())
+	public byte[] getSlot(int index, byte[] buffer, boolean raw) {
+		if (!isEmpty(index) && (random.nextBoolean() || raw))
 			scheduler.getSlot(index, buffer);
 		return buffer;
 	}

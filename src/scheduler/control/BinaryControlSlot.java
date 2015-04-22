@@ -86,17 +86,17 @@ public class BinaryControlSlot extends DummyControlSlot {
 
 	@Override
 	public boolean isEmpty(int index) {
-		return !coinBits.get(index) || scheduler.isEmpty(index);
+		return scheduler.isEmpty(index);
 	}
 
 	@Override
 	public int getLength(int index) {
-		return isEmpty(index) ? 0 : scheduler.getLength(index);
+		return scheduler.getLength(index);
 	}
 
 	@Override
-	public byte[] getSlot(int index, byte[] buffer) {
-		if (coinBits.get(index)) {
+	public byte[] getSlot(int index, byte[] buffer, boolean raw) {
+		if (coinBits.get(index) || raw) {
 			scheduler.getSlot(index, buffer);
 		}
 		return buffer;
